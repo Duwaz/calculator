@@ -1,6 +1,6 @@
 /*
 start := plus_minus
-plus_minus := (number '+' mul_div | number '-' mul_div | mul_div) [пока не конец данной строки] plus_minus
+plus_minus := (number '+' mul_div | number '-' mul_div | mul_div) ([конец рассматриваемой строки?] ? number : plus_minus )
 mul_div := number '*' ln | number '/' ln | ln
 ln := 'ln' pow | pow
 pow := number ^ atom | atom
