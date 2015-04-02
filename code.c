@@ -1,12 +1,11 @@
 /*
 start := plus_minus
-plus_minus := ( number '+' mul_div | number '-' mul_div | mul_div ) ( number '\0' | plus_minus )
-mul_div := number '*' ln | number '/' ln | ln
-ln := 'ln' pow | pow
-pow := number ^ atom | atom
-atom := '(' plus_minus | number ')' | number
+plus_minus := mul_div '+' plus_minus | mul_div '-' plus_minus | mul_div
+mul_div := ln '*' mul_div | ln '/' mul_div | ln
+ln := pow | 'ln' ln
+pow := atom ^ pow | atom
+atom := '(' plus_minus ')' | number
 */
-
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -21,7 +20,8 @@ enum Symbols {
 	DIV = '/',
 	POW = '^', 
 	LP = '(',
-	RP = ')'
+	RP = ')',
+	NUL = 0
 };
 
 typedef struct Token {
@@ -30,7 +30,7 @@ typedef struct Token {
 	struct Token* next;
 } Token;
 
-Token* plus_minus(Token*);
+Token* calculator(Token*, int);
 
 void freeList(Token* token) {
 	while (token != NULL) {
@@ -92,24 +92,28 @@ Token* Lexer(char** str) {
 			freeList(first);
 			return NULL;
 		}
+		if (next == 0) { current->next = (Token*)malloc(sizeof(Token)); break; }
 		current->next = next;
 		current = next;
 	}
+	current->next->type = NUL;
+	current->next->next = NULL;
 	return first;
 }
 
 double eval(char* str, double* res) {
 	Token* tokens;
 	Token* result;
+
 	tokens = Lexer(&str);
 	if (tokens == NULL) return 0;
-	result = plus_minus(tokens);
+	result = calculator(tokens, 0);
 	if (!result || result->type != NUMBER ) { //|| result->next != NULL
 		freeList(tokens);
 		return 0;
 	}
 	*res = result->value;
-	freeList(tokens);
+	free(result);
 	return 1;
 }
 
@@ -124,135 +128,114 @@ int main() {
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 
-Token* atom(Token* token)
+Token* calculator(Token* token, int control_signal)
 {
-	Token* dop_token;
-	Token* result;
-	
-	dop_token = token->next;
+	Token* dop_token; 
+	Token* for_free;
 
-	if(token->type == LP)
+	if (control_signal != 2 && control_signal < 5)
 	{
-		result = plus_minus(token->next);
-
-		token->type = NUMBER;
-		token->value = result->value;
-		token->next = result->next;
-	}
-	else
-	if(dop_token->type == RP)
-	{
-		token->next = dop_token->next;
+		token = calculator(token, control_signal+1);
 	}
 
-	return token;
-}
-
-Token* our_pow(Token* token)
-{
-	Token* dop_token;
-	Token* result;
-
-	dop_token = token->next;
-
-	if(dop_token != NULL && dop_token->type == POW)
+	switch (control_signal)
 	{
-		result = atom(dop_token->next);
+		case 0 : 
+			if (token->next->type == PLUS || token->next->type == MINUS)
+			{
+				dop_token = calculator(token->next->next, 0);
 
-		token->next = result->next;
-		token->type = NUMBER;
+				if (token->next->type == PLUS)
+				{
+					token->value += dop_token->value;
+				}
+				if (token->next->type == MINUS)
+				{
+					token->value -= dop_token->value;
+				}
 
-		token->value = pow(token->value, result->value);
-	}
-	else
-	{
-		token = atom(token);
-	}
-	return token;
-}
-
-Token* ln(Token* token)
-{
-	Token* result;
-
-	if(token->next != NULL && token->type == LN )
-	{
-		result = our_pow(token->next);
-
-		token->next = result->next;
-		token->type = NUMBER;
-
-		token->value = log(result->value);
-	}
-	else
-	{
-		token = our_pow(token);
-	}
-	return token;
-}
-
-Token* mul_div(Token* token)
-{
-	Token* dop_token;
-	Token* result;
-	
-	dop_token = token->next;
-
-	if(dop_token != NULL && (dop_token->type == MUL || dop_token->type == DIV))
-	{
-		result = ln(dop_token->next);
-			
-		token->next = result->next;
-		token->type = NUMBER;
-
-		if (dop_token->type == MUL) 
-		{
-			token->value = token->value * result->value;
-		}
-		if (dop_token->type == DIV) 
-		{
-			token->value = token->value / result->value;
-		}
-	}
-	else
-	{
-		token = ln(token);
-	}
-	return token;
-}
-
-Token* plus_minus(Token* token)
-{
-	Token* dop_token;
-	Token* result;
-	
-	dop_token = token->next;
-
-	if(dop_token != NULL && (dop_token->type == PLUS || dop_token->type == MINUS))
-	{
-		result = mul_div(dop_token->next);
+				token->type = NUMBER;
+				for_free = token->next;
+				token->next = dop_token->next;
+				free(for_free->next);
+				free(for_free);
+				return token;
+			}
+			break;
 		
-		token->next = result->next;
-		token->type = NUMBER;	
+		case 1 : 
+			if (token->next->type == MUL || token->next->type == DIV)
+			{
+				dop_token = calculator(token->next->next, 1);
 
-		if (dop_token->type == PLUS) 
-		{
-			token->value = token->value + result->value;
-		}
-		if (dop_token->type == MINUS) 
-		{
-			token->value = token->value - result->value;
-		}	
-	}
-	else
-	{
-		token = mul_div(token);
-	}
+				if (token->next->type == MUL)
+				{
+					token->value *= dop_token->value;
+				}
+				if (token->next->type == DIV)
+				{
+					token->value /= dop_token->value;
+				}
 
-	if (token->next != NULL)
-	{
-		return plus_minus(token);
+				token->type = NUMBER;
+				for_free = token->next;
+				token->next = dop_token->next;
+				free(dop_token);
+				free(for_free);
+				return token;
+			}
+			break;
+
+		case 2 : 
+			if (token->type == LN)
+			{
+				dop_token = calculator(token->next, 2);					
+				token->value = log(dop_token->value);
+				token->type = NUMBER;
+				for_free = token->next;
+				token->next = dop_token->next;
+				free(for_free);
+				return token;
+			}
+			else
+			{
+				return calculator(token, 3);
+			}
+			break;
+
+		case 3 : 
+			if (token->next->type == POW)
+			{
+				dop_token = calculator(token->next->next, 3);					
+				token->value = pow(token->value, dop_token->value);
+				token->type = NUMBER;
+				for_free = token->next;
+				token->next = dop_token->next;
+				free(for_free->next);
+				free(for_free);
+				return token;
+			}
+			break;
+
+		case 4 :
+			if (token->type == LP)
+			{
+				for_free = token;
+				token = token->next;
+				free(for_free);
+				token = calculator(token, 0);
+				for_free = token->next;
+				token->next = for_free->next;
+				free(for_free);
+				return token;
+			}
+			if (token->type == NUMBER)
+			{
+				return token;
+			}
+
+	default:
+		break;
 	}
-	else
-		return token;
+	return token;
 }
