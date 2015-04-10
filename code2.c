@@ -183,6 +183,8 @@ AST_t* plus_minus(Token* token)
 }
 
 /*
+Как всё докатилось до такого кода.
+
 Вот ваш код с доски
 
 AST_t* plus_minus()
