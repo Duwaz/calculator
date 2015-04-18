@@ -32,8 +32,8 @@ typedef struct Token {
 typedef struct AST_t {
 	int data;
 	enum Symbols type;
-	AST_t* left;
-	AST_t* right;
+	struct AST_t* left;
+	struct AST_t* right;
 } AST_t;
 
 AST_t* plus_minus(Token*);
