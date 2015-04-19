@@ -263,6 +263,6 @@ float calculate(AST_t* tree)
 	if (tree->type == MUL) return calculate(tree->left)*calculate(tree->right);
 	if (tree->type == MINUS) return calculate(tree->left)-calculate(tree->right);
 	if (tree->type == DIV) return calculate(tree->left)/calculate(tree->right);
-	if (tree->type == LN) return log(calculate(tree->right));
+	if (tree->type == LN) return log(calculate(tree->left));
 	if (tree->type == POW) return pow(calculate(tree->left),calculate(tree->right));
 }
