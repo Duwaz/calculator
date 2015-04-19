@@ -109,7 +109,7 @@ AST_t* eval(char* str) {
 
 	tokens = Lexer(&str);
 	if (tokens == NULL) return 0;
-	return plus_minus(tokens);
+	return plus_minus(&tokens);
 }
 
 int main() {
@@ -126,36 +126,44 @@ int main() {
 	getchar();
 }
 
-/*	//////////////////////////////////////////		*/
+/*	//////////////////////////////////////////////////////////////////////////////////////	*/
 
-int accept(enum Symbols type, Token* token)
+int accept(enum Symbols type, Token** token)
 {
-	if (!token->next) return NULL;
-	if (!token->next->type == type) return NULL;
-	token=token->next;
+	if (!(*token)) return NULL;
+	if ((*token)->type != type) return NULL;
+	(*token)=(*token)->next;
 	return 1;
 }
 
-/*	//////////////////////////////////////////		*/
+int expect(enum Symbols type, Token** token)
+{
+	if (!token) return NULL;
+	if ((*token)->type != type) return NULL;
+	return 1;
+}
 
-AST_t* atom(Token* token)
+/*	//////////////////////////////////////////////////////////////////////////////////////	*/
+
+AST_t* atom(Token** token)
 {
 	AST_t *output;
-	if (accept(RP, token))
+	if (accept(LP, token))
  	{
 		output = plus_minus(token);
-		if (accept(LP, token)) return output;
+		if (accept(RP, token) ) return output;
 
 		return NULL;
  	}
 	else 
-		if (accept(NUMBER, token))
+		if (expect(NUMBER, token))
 		{
 			output = (AST_t*) malloc (sizeof(AST_t));
 			output->type=NUMBER;
-			output->data=token->value;
+			output->data=(*token)->value;
 			output->left=NULL;
 			output->right=NULL;
+			(*token)=(*token)->next;
 
 			return output;
 		}
@@ -163,19 +171,57 @@ AST_t* atom(Token* token)
 			return NULL;
 }
 
-AST_t* mul_div(Token* token)
+AST_t* sub(Token** token)
 {
 	AST_t* right, *output;
 	AST_t* left = atom(token);
 	if (! left) return NULL;
-	token=token->next;
-	if (accept(MUL, token))
+	if (accept(POW, token))
+ 	{
+		right = sub(token);
+		if (! right) return NULL;
+
+		output = (AST_t*) malloc (sizeof(AST_t));
+		output->type=POW;
+		output->left = left;
+		output->right = right;
+
+		return output;
+ 	}
+	else return left;
+}
+
+AST_t* ln(Token** token)
+{
+	AST_t* left, *output;
+	if (accept(LN, token))
+ 	{
+		left = ln(token);
+		if (! left) return NULL;
+
+		output = (AST_t*) malloc (sizeof(AST_t));
+		output->type=LN;
+		output->left = left;
+		output->right = NULL;
+
+		return output;
+ 	}
+	else return sub(token);
+}
+
+AST_t* mul_div(Token** token)
+{
+	enum Symbols type;
+	AST_t* right, *output;
+	AST_t* left = ln(token);
+	if (! left) return NULL;
+	if (accept(type = MUL, token) || accept(type = DIV, token))
  	{
 		right = mul_div(token);
 		if (! right) return NULL;
 
 		output = (AST_t*) malloc (sizeof(AST_t));
-		output->type=MUL;
+		output->type=type;
 		output->left = left;
 		output->right = right;
 
@@ -184,19 +230,19 @@ AST_t* mul_div(Token* token)
 	else return left;
 }
 
-AST_t* plus_minus(Token* token)
+AST_t* plus_minus(Token** token)
 {
+	enum Symbols type;
 	AST_t* right, *output;
 	AST_t* left = mul_div(token);
 	if (! left) return NULL;
-	token=token->next;
-	if (accept(PLUS, token))
+	if (accept(type = PLUS, token) || accept(type = MINUS, token))
  	{
 		right = plus_minus(token);
 		if (! right) return NULL;
 		
 		output = (AST_t*) malloc (sizeof(AST_t));
-		output->type=PLUS;
+		output->type=type;
 		output->left = left;
 		output->right = right;
 
@@ -205,7 +251,7 @@ AST_t* plus_minus(Token* token)
 	else return left;
 }
 
-/*	//////////////////////////////////////////		*/
+/*	//////////////////////////////////////////////////////////////////////////////////////	*/
 
 float calculate(AST_t* tree)
 {
@@ -215,4 +261,8 @@ float calculate(AST_t* tree)
 
 	if (tree->type == PLUS) return calculate(tree->left)+calculate(tree->right);
 	if (tree->type == MUL) return calculate(tree->left)*calculate(tree->right);
+	if (tree->type == MINUS) return calculate(tree->left)-calculate(tree->right);
+	if (tree->type == DIV) return calculate(tree->left)/calculate(tree->right);
+	if (tree->type == LN) return log(calculate(tree->right));
+	if (tree->type == POW) return pow(calculate(tree->left),calculate(tree->right));
 }
